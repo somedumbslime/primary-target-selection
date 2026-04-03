@@ -1,0 +1,14 @@
+tracker_type: bytetrack
+
+# Detection-score gates
+track_high_thresh: 0.35
+track_low_thresh: 0.10
+new_track_thresh: 0.50
+
+# Re-association and retention
+track_buffer: 80
+match_thresh: 0.75
+fuse_score: true
+
+# MOT20 switch (keep false for normal scenes)
+mot20: false

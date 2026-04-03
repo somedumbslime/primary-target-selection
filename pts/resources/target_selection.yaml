@@ -1,0 +1,42 @@
+store:
+  history_size: 20
+  alpha_center: 0.4
+  alpha_area: 0.3
+  max_missed_frames: 15
+
+filtering:
+  min_track_lifetime: 6
+  min_avg_conf: 0.35
+  min_area_ratio: 0.0005
+  max_miss_count: 3
+
+features:
+  conf_min: 0.25
+  conf_max: 0.95
+  lifetime_ref: 20.0
+  area_ref: 0.02
+  growth_window: 5
+  growth_clip: 0.5
+  center_max_dist: 0.7071
+  center_jitter_ref: 0.08
+  area_jitter_ref: 0.5
+
+scoring:
+  w_conf: 0.25
+  w_lifetime: 0.20
+  w_area: 0.15
+  w_growth: 0.10
+  w_center: 0.15
+  w_stability: 0.15
+
+selection:
+  switch_margin: 0.18
+  switch_persistence_frames: 5
+  target_lost_grace_frames: 10
+  min_acquire_score: 0.45
+  acquire_persistence_frames: 3
+
+logging:
+  log_candidate_rejected: false
+  log_score_updated: false
+  score_update_top_k: 3

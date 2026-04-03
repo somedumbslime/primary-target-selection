@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "primary-target-selection"
+version = "0.1.0"
+description = "Primary target selection layer for tracked objects in dynamic video streams."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "pyyaml>=6.0.1",
+]
+
+[project.optional-dependencies]
+examples = [
+  "ultralytics>=8.2.0",
+  "opencv-python>=4.10.0",
+  "numpy>=1.26.0",
+]
+
+[project.scripts]
+pts-ab-test = "pts.target_selection.ab_test:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pts*"]
+
+[tool.setuptools.package-data]
+pts = ["resources/*.yaml"]

@@ -1,0 +1,11 @@
+profiles:
+  balanced:
+    conf: 0.22
+    iou: 0.50
+  fast:
+    conf: 0.28
+    iou: 0.55
+  recall:
+    conf: 0.18
+    iou: 0.45
+

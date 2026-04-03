@@ -1,0 +1,20 @@
+tracker_type: botsort
+
+# Detection-score gates
+track_high_thresh: 0.30
+track_low_thresh: 0.10
+new_track_thresh: 0.35
+
+# Re-association and retention
+track_buffer: 90
+match_thresh: 0.80
+fuse_score: true
+
+# Camera motion compensation for moving FPV scenes
+gmc_method: sparseOptFlow
+
+# ReID-specific settings
+with_reid: true
+proximity_thresh: 0.45
+appearance_thresh: 0.25
+model: auto
