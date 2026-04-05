@@ -108,6 +108,16 @@ class ScoreBreakdown:
     center_contrib: float
     stability_contrib: float
     final_score: float
+    policy_contrib: float = 0.0
+    external_contrib: float = 0.0
+    policy_raw_contrib: float = 0.0
+    external_raw_contrib: float = 0.0
+    policy_clip_abs: float = 0.0
+    external_clip_abs: float = 0.0
+    total_bonus_clip_abs: float = 0.0
+    policy_clip_applied: float = 0.0
+    external_clip_applied: float = 0.0
+    total_bonus_clip_applied: float = 0.0
 
     def as_dict(self) -> dict[str, float]:
         return {
@@ -117,6 +127,16 @@ class ScoreBreakdown:
             "growth_contrib": self.growth_contrib,
             "center_contrib": self.center_contrib,
             "stability_contrib": self.stability_contrib,
+            "policy_contrib": self.policy_contrib,
+            "external_contrib": self.external_contrib,
+            "policy_raw_contrib": self.policy_raw_contrib,
+            "external_raw_contrib": self.external_raw_contrib,
+            "policy_clip_abs": self.policy_clip_abs,
+            "external_clip_abs": self.external_clip_abs,
+            "total_bonus_clip_abs": self.total_bonus_clip_abs,
+            "policy_clip_applied": self.policy_clip_applied,
+            "external_clip_applied": self.external_clip_applied,
+            "total_bonus_clip_applied": self.total_bonus_clip_applied,
             "final_score": self.final_score,
         }
 

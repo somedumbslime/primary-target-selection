@@ -28,6 +28,18 @@ scoring:
   w_growth: 0.10
   w_center: 0.15
   w_stability: 0.15
+  policy_name: single_best
+  policy_strength: 0.20
+  class_priority_gain: 0.25
+  class_priority_weights: {}
+  preferred_track_bonus: 0.20
+  track_bias_scale: 1.0
+  class_bias_scale: 1.0
+  external_hint_scale: 1.0
+  # Guardrails: keep policy/external bonuses from overpowering base feature score.
+  max_policy_bonus_abs: 0.20
+  max_external_bonus_abs: 0.25
+  max_total_bonus_abs: 0.35
 
 selection:
   switch_margin: 0.18

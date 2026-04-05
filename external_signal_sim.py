@@ -29,10 +29,32 @@ def _resolve(path: str) -> Path:
 
 def _pick_model(models_dir: Path, explicit_path: str = "") -> Path:
     if explicit_path:
-        path = _resolve(explicit_path)
-        if not path.exists():
-            raise FileNotFoundError(f"Model file not found: {path}")
-        return path
+        raw = Path(explicit_path).expanduser()
+        candidates: list[Path] = []
+        if raw.is_absolute():
+            candidates.append(raw.resolve())
+        else:
+            # Priority 1: treat --model as file name/path inside --models-dir.
+            candidates.append((models_dir / raw).resolve())
+            # Priority 2: treat --model as path relative to project root.
+            candidates.append(_resolve(explicit_path))
+
+        seen: set[Path] = set()
+        unique_candidates: list[Path] = []
+        for candidate in candidates:
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            unique_candidates.append(candidate)
+
+        for path in unique_candidates:
+            if path.exists() and path.is_file():
+                return path
+
+        raise FileNotFoundError(
+            "Model file not found. Tried: "
+            + ", ".join(str(path) for path in unique_candidates)
+        )
 
     if not models_dir.exists():
         raise FileNotFoundError(f"Models dir not found: {models_dir}")
@@ -178,7 +200,8 @@ def _process_video(
     device: str,
     render: bool,
     max_frames: int | None,
-    tracker_name: str,
+    policy_name: str | None,
+    external_signals: dict[str, Any] | None,
 ) -> dict[str, Any]:
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
@@ -226,6 +249,8 @@ def _process_video(
                 frame_size=(w, h),
                 frame_idx=frame_idx,
                 timestamp_s=ts,
+                policy_name=policy_name,
+                external_signals=external_signals,
             )
 
             current_primary = out.primary_track_id
@@ -275,6 +300,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tracker", choices=["bytetrack", "botsort"], default="bytetrack")
     parser.add_argument("--tracker-config", type=str, default="", help="Optional tracker YAML path override")
     parser.add_argument("--selection-config", type=str, default="", help="Optional pts selection config YAML path")
+    parser.add_argument(
+        "--policy",
+        type=str,
+        default="",
+        help="Optional selection policy override (single_best, center_biased, stable_target, largest_target, class_priority).",
+    )
+    parser.add_argument(
+        "--external-signals-json",
+        type=str,
+        default="",
+        help="Optional path to JSON with external signals (preferred_track_id, track_score_bias, class_score_bias, external_hint_score).",
+    )
     parser.add_argument("--conf", type=float, default=0.22)
     parser.add_argument("--iou", type=float, default=0.5)
     parser.add_argument("--max-frames", type=int, default=0)
@@ -299,6 +336,15 @@ def main() -> None:
 
     tracker_ref = str(_resolve(args.tracker_config)) if args.tracker_config else TRACKER_TO_ULTRA[str(args.tracker)]
     selection_cfg = str(_resolve(args.selection_config)) if args.selection_config else None
+    policy_name = str(args.policy).strip() or None
+    external_signals: dict[str, Any] | None = None
+    if str(args.external_signals_json).strip():
+        raw_external = _resolve(str(args.external_signals_json))
+        with raw_external.open("r", encoding="utf-8") as f:
+            payload = json.load(f)
+        if not isinstance(payload, dict):
+            raise ValueError("--external-signals-json must point to JSON object")
+        external_signals = payload
 
     model = YOLO(str(model_path))
     selector = PrimaryTargetSelection(config_path=selection_cfg)
@@ -306,7 +352,10 @@ def main() -> None:
     summary: list[dict[str, Any]] = []
 
     print(f"[INIT] model={model_path}")
-    print(f"[INIT] tracker={args.tracker} tracker_ref={tracker_ref} device={args.device} videos={len(videos)}")
+    print(
+        f"[INIT] tracker={args.tracker} tracker_ref={tracker_ref} policy={policy_name or 'config_default'} "
+        f"device={args.device} videos={len(videos)}"
+    )
 
     for video in videos:
         output_video = output_dir / f"{video.stem}_pred.mp4"
@@ -323,7 +372,8 @@ def main() -> None:
             device=str(args.device),
             render=not bool(args.no_render),
             max_frames=max_frames,
-            tracker_name=str(args.tracker),
+            policy_name=policy_name,
+            external_signals=external_signals,
         )
         summary.append(stats)
         print(

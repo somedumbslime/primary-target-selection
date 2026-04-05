@@ -22,8 +22,36 @@ def load_event_rows(path: Path) -> list[dict[str, Any]]:
                 row = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if isinstance(row, dict):
+            if not isinstance(row, dict):
+                continue
+
+            # Native event row format produced by JsonlEventLogger.
+            if "event_type" in row:
                 rows.append(row)
+                continue
+
+            # external_signal_sim format: one record per frame with nested `events` list.
+            nested_events = row.get("events")
+            if isinstance(nested_events, list):
+                for event in nested_events:
+                    if not isinstance(event, dict):
+                        continue
+                    frame_idx = event.get("frame_idx", row.get("frame_index"))
+                    rows.append(
+                        {
+                            "frame_idx": frame_idx,
+                            "video_time_sec": event.get("video_time_sec", row.get("timestamp_s")),
+                            "event_type": event.get("event_type"),
+                            "track_id": event.get("track_id"),
+                            "previous_track_id": event.get("previous_track_id"),
+                            "final_score": event.get("final_score"),
+                            "score_breakdown": event.get("score_breakdown"),
+                            "bbox": event.get("bbox"),
+                            "avg_conf": event.get("avg_conf"),
+                            "lifetime": event.get("lifetime"),
+                            "selection_reason": event.get("selection_reason", row.get("selection_reason")),
+                        }
+                    )
 
     rows.sort(key=lambda r: int(r.get("frame_idx", -1)))
     return rows
@@ -43,11 +71,19 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
-def summarize_event_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+def summarize_event_rows(rows: list[dict[str, Any]], frames_total: int | None = None) -> dict[str, Any]:
     event_counts = Counter(str(r.get("event_type", "")) for r in rows)
     acquired = int(event_counts.get("target_acquired", 0))
     lost = int(event_counts.get("target_lost", 0))
     switched = int(event_counts.get("target_switched", 0))
+    candidate_rejected = int(event_counts.get("candidate_rejected", 0))
+
+    selection_reason_counts = Counter(str(r.get("selection_reason", "")) for r in rows if r.get("selection_reason"))
+    reject_reason_counts = Counter(
+        reason
+        for reason, count in selection_reason_counts.items()
+        if reason.startswith("candidate_rejected_") and count > 0
+    )
 
     runs: list[int] = []
     current_target: int | None = None
@@ -79,8 +115,19 @@ def summarize_event_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
         last_frame = frame_idx
 
+    if frames_total is not None and int(frames_total) > 0:
+        last_frame = max(last_frame if last_frame is not None else -1, int(frames_total) - 1)
+
     if current_target is not None and run_start is not None and last_frame is not None and last_frame >= run_start:
         runs.append(last_frame - run_start)
+
+    first_acquire_frame: int | None = None
+    for r in rows:
+        if str(r.get("event_type", "")) == "target_acquired":
+            candidate = _safe_int(r.get("frame_idx"), -1)
+            if candidate >= 0:
+                first_acquire_frame = candidate
+                break
 
     quick_drop_gaps: list[int] = []
     lost_to_next: list[tuple[int, int | None, int | None]] = []
@@ -122,15 +169,71 @@ def summarize_event_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     scores = [_safe_float(r.get("final_score"), -1.0) for r in acquire_like if r.get("final_score") is not None]
     scores = [v for v in scores if v >= 0.0]
 
+    score_rows = [r for r in rows if isinstance(r.get("score_breakdown"), dict)]
+    policy_contrib_values: list[float] = []
+    external_contrib_values: list[float] = []
+    bonus_dominated_count = 0
+    policy_dominated_count = 0
+    external_dominated_count = 0
+    policy_clip_count = 0
+    external_clip_count = 0
+    total_bonus_clip_count = 0
+    policy_clip_abs_values: list[float] = []
+    external_clip_abs_values: list[float] = []
+    total_bonus_clip_abs_values: list[float] = []
+    for row in score_rows:
+        breakdown = row.get("score_breakdown")
+        if not isinstance(breakdown, dict):
+            continue
+        policy = _safe_float(breakdown.get("policy_contrib"), 0.0)
+        external = _safe_float(breakdown.get("external_contrib"), 0.0)
+        base = (
+            _safe_float(breakdown.get("conf_contrib"), 0.0)
+            + _safe_float(breakdown.get("lifetime_contrib"), 0.0)
+            + _safe_float(breakdown.get("area_contrib"), 0.0)
+            + _safe_float(breakdown.get("growth_contrib"), 0.0)
+            + _safe_float(breakdown.get("center_contrib"), 0.0)
+            + _safe_float(breakdown.get("stability_contrib"), 0.0)
+        )
+        policy_contrib_values.append(policy)
+        external_contrib_values.append(external)
+        bonus_abs = abs(policy + external)
+        if bonus_abs > abs(base):
+            bonus_dominated_count += 1
+        if abs(policy) > abs(base) and abs(policy) >= abs(external):
+            policy_dominated_count += 1
+        if abs(external) > abs(base) and abs(external) > abs(policy):
+            external_dominated_count += 1
+        policy_clip_count += _safe_int(breakdown.get("policy_clip_applied"), 0)
+        external_clip_count += _safe_int(breakdown.get("external_clip_applied"), 0)
+        total_bonus_clip_count += _safe_int(breakdown.get("total_bonus_clip_applied"), 0)
+        policy_clip_abs_values.append(abs(_safe_float(breakdown.get("policy_clip_abs"), 0.0)))
+        external_clip_abs_values.append(abs(_safe_float(breakdown.get("external_clip_abs"), 0.0)))
+        total_bonus_clip_abs_values.append(abs(_safe_float(breakdown.get("total_bonus_clip_abs"), 0.0)))
+
+    locked_frames_total = int(sum(runs))
+    total_frames_for_ratio = int(frames_total) if frames_total is not None and int(frames_total) > 0 else (
+        (last_frame + 1) if last_frame is not None and last_frame >= 0 else 0
+    )
+    primary_presence_ratio = (locked_frames_total / total_frames_for_ratio) if total_frames_for_ratio > 0 else 0.0
+    primary_stability_ratio = 1.0 - (switched / max(len(runs), 1))
+    primary_stability_ratio = max(0.0, min(1.0, primary_stability_ratio))
+
     return {
         "events_total": len(rows),
         "acquired": acquired,
         "lost": lost,
         "switched": switched,
+        "candidate_rejected": candidate_rejected,
         "target_runs_count": len(runs),
         "target_run_avg_frames": (sum(runs) / len(runs)) if runs else 0.0,
         "target_run_min_frames": min(runs) if runs else 0,
         "target_run_max_frames": max(runs) if runs else 0,
+        "mean_lock_duration_frames": (sum(runs) / len(runs)) if runs else 0.0,
+        "max_lock_duration_frames": max(runs) if runs else 0,
+        "primary_target_presence_ratio": primary_presence_ratio,
+        "primary_target_stability_ratio": primary_stability_ratio,
+        "target_acquisition_delay_frames": first_acquire_frame,
         "flap_le_5_frames": sum(1 for d in quick_drop_gaps if d <= 5),
         "flap_le_10_frames": sum(1 for d in quick_drop_gaps if d <= 10),
         "flap_checks_total": len(quick_drop_gaps),
@@ -144,6 +247,23 @@ def summarize_event_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "acquire_score_avg": (sum(scores) / len(scores)) if scores else 0.0,
         "acquire_score_min": min(scores) if scores else 0.0,
         "acquire_score_max": max(scores) if scores else 0.0,
+        "selection_reason_counts": dict(selection_reason_counts),
+        "reject_reason_counts": dict(reject_reason_counts),
+        "avg_policy_contrib": (sum(policy_contrib_values) / len(policy_contrib_values)) if policy_contrib_values else 0.0,
+        "avg_external_contrib": (sum(external_contrib_values) / len(external_contrib_values)) if external_contrib_values else 0.0,
+        "bonus_dominated_count": bonus_dominated_count,
+        "policy_dominated_count": policy_dominated_count,
+        "external_dominated_count": external_dominated_count,
+        "score_rows_count": len(score_rows),
+        "policy_clip_count": policy_clip_count,
+        "external_clip_count": external_clip_count,
+        "total_bonus_clip_count": total_bonus_clip_count,
+        "policy_clip_ratio": (policy_clip_count / len(score_rows)) if score_rows else 0.0,
+        "external_clip_ratio": (external_clip_count / len(score_rows)) if score_rows else 0.0,
+        "total_bonus_clip_ratio": (total_bonus_clip_count / len(score_rows)) if score_rows else 0.0,
+        "avg_policy_clip_abs": (sum(policy_clip_abs_values) / len(policy_clip_abs_values)) if policy_clip_abs_values else 0.0,
+        "avg_external_clip_abs": (sum(external_clip_abs_values) / len(external_clip_abs_values)) if external_clip_abs_values else 0.0,
+        "avg_total_bonus_clip_abs": (sum(total_bonus_clip_abs_values) / len(total_bonus_clip_abs_values)) if total_bonus_clip_abs_values else 0.0,
     }
 
 

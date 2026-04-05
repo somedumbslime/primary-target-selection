@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from importlib import resources
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 import tempfile
 
 from .target_selection.domain.models import TrackObservation
@@ -36,6 +36,16 @@ def _to_breakdown(raw: Any) -> SelectionScoreBreakdown:
         center_contrib=float(raw.center_contrib),
         stability_contrib=float(raw.stability_contrib),
         final_score=float(raw.final_score),
+        policy_contrib=float(getattr(raw, "policy_contrib", 0.0)),
+        external_contrib=float(getattr(raw, "external_contrib", 0.0)),
+        policy_raw_contrib=float(getattr(raw, "policy_raw_contrib", 0.0)),
+        external_raw_contrib=float(getattr(raw, "external_raw_contrib", 0.0)),
+        policy_clip_abs=float(getattr(raw, "policy_clip_abs", 0.0)),
+        external_clip_abs=float(getattr(raw, "external_clip_abs", 0.0)),
+        total_bonus_clip_abs=float(getattr(raw, "total_bonus_clip_abs", 0.0)),
+        policy_clip_applied=float(getattr(raw, "policy_clip_applied", 0.0)),
+        external_clip_applied=float(getattr(raw, "external_clip_applied", 0.0)),
+        total_bonus_clip_applied=float(getattr(raw, "total_bonus_clip_applied", 0.0)),
     )
 
 
@@ -50,6 +60,16 @@ def _to_event(raw_event: Any) -> SelectionEvent:
             center_contrib=float(raw_event.score_breakdown.get("center_contrib", 0.0)),
             stability_contrib=float(raw_event.score_breakdown.get("stability_contrib", 0.0)),
             final_score=float(raw_event.score_breakdown.get("final_score", 0.0)),
+            policy_contrib=float(raw_event.score_breakdown.get("policy_contrib", 0.0)),
+            external_contrib=float(raw_event.score_breakdown.get("external_contrib", 0.0)),
+            policy_raw_contrib=float(raw_event.score_breakdown.get("policy_raw_contrib", 0.0)),
+            external_raw_contrib=float(raw_event.score_breakdown.get("external_raw_contrib", 0.0)),
+            policy_clip_abs=float(raw_event.score_breakdown.get("policy_clip_abs", 0.0)),
+            external_clip_abs=float(raw_event.score_breakdown.get("external_clip_abs", 0.0)),
+            total_bonus_clip_abs=float(raw_event.score_breakdown.get("total_bonus_clip_abs", 0.0)),
+            policy_clip_applied=float(raw_event.score_breakdown.get("policy_clip_applied", 0.0)),
+            external_clip_applied=float(raw_event.score_breakdown.get("external_clip_applied", 0.0)),
+            total_bonus_clip_applied=float(raw_event.score_breakdown.get("total_bonus_clip_applied", 0.0)),
         )
 
     return SelectionEvent(
@@ -156,6 +176,8 @@ class PrimaryTargetSelection:
         frame_size: tuple[int, int],
         frame_idx: int | None = None,
         timestamp_s: float | None = None,
+        policy_name: str | None = None,
+        external_signals: Mapping[str, object] | None = None,
     ) -> SelectionOutput:
         idx = self.frame_idx if frame_idx is None else int(frame_idx)
         ts = float(idx) if timestamp_s is None else float(timestamp_s)
@@ -170,6 +192,8 @@ class PrimaryTargetSelection:
             observations=observations,
             frame_idx=idx,
             timestamp_s=ts,
+            policy_name=policy_name,
+            external_signals=(dict(external_signals) if external_signals is not None else None),
         )
         self.frame_idx = idx + 1
         return self._build_output(processed)
@@ -181,6 +205,8 @@ class PrimaryTargetSelection:
         frame_idx: int | None = None,
         timestamp_s: float | None = None,
         class_names: dict[int, str] | None = None,
+        policy_name: str | None = None,
+        external_signals: Mapping[str, object] | None = None,
     ) -> SelectionOutput:
         idx = self.frame_idx if frame_idx is None else int(frame_idx)
         ts = float(idx) if timestamp_s is None else float(timestamp_s)
@@ -190,6 +216,8 @@ class PrimaryTargetSelection:
             timestamp_s=ts,
             frame_shape=frame_shape,
             class_names=class_names or {},
+            policy_name=policy_name,
+            external_signals=(dict(external_signals) if external_signals is not None else None),
         )
         self.frame_idx = idx + 1
         return self._build_output(processed)
@@ -293,4 +321,3 @@ class PrimaryTargetSelection:
             candidates=candidates,
             scores=score_map,
         )
-

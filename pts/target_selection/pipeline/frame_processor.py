@@ -82,6 +82,8 @@ class TargetSelectionFrameProcessor:
         timestamp_s: float,
         frame_shape: tuple[int, int],
         class_names: dict[int, str] | None = None,
+        policy_name: str | None = None,
+        external_signals: dict[str, Any] | None = None,
     ) -> FrameProcessingResult:
         observations = self._observations_from_prediction(
             prediction=prediction,
@@ -94,6 +96,8 @@ class TargetSelectionFrameProcessor:
             observations=observations,
             frame_idx=frame_idx,
             timestamp_s=timestamp_s,
+            policy_name=policy_name,
+            external_signals=external_signals,
         )
 
     def process_observations(
@@ -101,6 +105,8 @@ class TargetSelectionFrameProcessor:
         observations: list[TrackObservation],
         frame_idx: int,
         timestamp_s: float,
+        policy_name: str | None = None,
+        external_signals: dict[str, Any] | None = None,
     ) -> FrameProcessingResult:
         states = self.store.update(observations=observations, frame_idx=frame_idx)
 
@@ -111,7 +117,13 @@ class TargetSelectionFrameProcessor:
         for cand in accepted_candidates:
             features[cand.track_id] = self.feature_extractor.extract(cand)
 
-        scores: dict[int, ScoreBreakdown] = self.scorer.score_many(features)
+        candidate_map = {candidate.track_id: candidate for candidate in accepted_candidates}
+        scores: dict[int, ScoreBreakdown] = self.scorer.score_many(
+            features=features,
+            candidates=candidate_map,
+            policy_name=policy_name,
+            external_signals=external_signals,
+        )
         selection: SelectionResult = self.selector.select(scores)
 
         events = self._build_events(

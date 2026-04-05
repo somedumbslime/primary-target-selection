@@ -57,6 +57,16 @@ class SelectionScoreBreakdown:
     center_contrib: float
     stability_contrib: float
     final_score: float
+    policy_contrib: float = 0.0
+    external_contrib: float = 0.0
+    policy_raw_contrib: float = 0.0
+    external_raw_contrib: float = 0.0
+    policy_clip_abs: float = 0.0
+    external_clip_abs: float = 0.0
+    total_bonus_clip_abs: float = 0.0
+    policy_clip_applied: float = 0.0
+    external_clip_applied: float = 0.0
+    total_bonus_clip_applied: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -98,4 +108,3 @@ class SelectionOutput:
     events: list[SelectionEvent] = field(default_factory=list)
     candidates: list[SelectionCandidate] = field(default_factory=list)
     scores: dict[int, SelectionScoreBreakdown] = field(default_factory=dict)
-

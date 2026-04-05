@@ -18,6 +18,9 @@ examples = [
   "opencv-python>=4.10.0",
   "numpy>=1.26.0",
 ]
+dev = [
+  "pytest>=8.2.0",
+]
 
 [project.scripts]
 pts-ab-test = "pts.target_selection.ab_test:main"
