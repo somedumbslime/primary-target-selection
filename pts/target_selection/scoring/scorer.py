@@ -30,6 +30,8 @@ class ScoringConfig:
     max_policy_bonus_abs: float = 0.20
     max_external_bonus_abs: float = 0.25
     max_total_bonus_abs: float = 0.35
+    # Optional config for stateful "auto" policy router (used in frame processor).
+    auto_policy: dict[str, Any] = field(default_factory=dict)
 
 
 def _clamp_abs(value: float, max_abs: float) -> float:

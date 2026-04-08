@@ -40,6 +40,19 @@ scoring:
   max_policy_bonus_abs: 0.20
   max_external_bonus_abs: 0.25
   max_total_bonus_abs: 0.35
+  # Auto-policy router (used only when policy_name=auto).
+  auto_policy:
+    center_assist_enter_dist: 0.30
+    center_assist_exit_dist: 0.22
+    min_primary_stability: 0.45
+    min_primary_conf: 0.35
+    min_primary_lifetime: 6
+    min_margin_for_center_assist: 0.03
+    min_mode_dwell_frames: 8
+    transition_persistence_frames: 2
+    scene_window_frames: 60
+    scene_lost_threshold: 2
+    scene_switch_threshold: 2
 
 selection:
   switch_margin: 0.18

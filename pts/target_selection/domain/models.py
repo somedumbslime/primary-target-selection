@@ -192,3 +192,10 @@ class FrameProcessingResult:
     selection: SelectionResult
     events: list[EventRecord]
     active_tracks: dict[int, TrackState]
+    effective_policy_name: str | None = None
+    auto_mode: str | None = None
+    auto_mode_reason: str | None = None
+    auto_scene_unstable: bool | None = None
+    auto_primary_acceptable: bool | None = None
+    auto_primary_center_dist: float | None = None
+    auto_primary_margin_to_runner_up: float | None = None

@@ -176,6 +176,9 @@ def _signal_from_output(out: Any) -> dict[str, Any]:
         "tracks_count": len(out.candidates),
         "events": [asdict(evt) for evt in out.events],
         "primary": None,
+        "effective_policy_name": out.effective_policy_name,
+        "auto_mode": out.auto_mode,
+        "auto_mode_reason": out.auto_mode_reason,
     }
     if primary_candidate is not None:
         payload["primary"] = {
@@ -304,7 +307,7 @@ def parse_args() -> argparse.Namespace:
         "--policy",
         type=str,
         default="",
-        help="Optional selection policy override (single_best, center_biased, stable_target, largest_target, class_priority).",
+        help="Optional selection policy override (single_best, center_biased, stable_target, largest_target, class_priority, auto).",
     )
     parser.add_argument(
         "--external-signals-json",

@@ -320,4 +320,11 @@ class PrimaryTargetSelection:
             events=events,
             candidates=candidates,
             scores=score_map,
+            effective_policy_name=getattr(processed, "effective_policy_name", None),
+            auto_mode=getattr(processed, "auto_mode", None),
+            auto_mode_reason=getattr(processed, "auto_mode_reason", None),
+            auto_scene_unstable=getattr(processed, "auto_scene_unstable", None),
+            auto_primary_acceptable=getattr(processed, "auto_primary_acceptable", None),
+            auto_primary_center_dist=getattr(processed, "auto_primary_center_dist", None),
+            auto_primary_margin_to_runner_up=getattr(processed, "auto_primary_margin_to_runner_up", None),
         )

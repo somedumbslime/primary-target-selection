@@ -21,6 +21,7 @@ from ..logging.schemas import make_event_record
 from ..scoring import ScoringConfig, TargetScorer
 from ..selection import PrimarySelectorConfig, PrimaryTargetSelector
 from ..tracking import TrackFilter, TrackFilterConfig, TrackStateStore, TrackStateStoreConfig
+from .auto_policy import AutoPolicyConfig, AutoPolicyDecision, AutoPolicyRouter
 
 
 @dataclass
@@ -66,6 +67,16 @@ class TargetSelectionFrameProcessor:
         self.feature_extractor = FeatureExtractor(config.features)
         self.scorer = TargetScorer(config.scoring)
         self.selector = PrimaryTargetSelector(config.selection)
+        auto_policy_cfg = AutoPolicyConfig.from_dict(config.scoring.auto_policy)
+        self.auto_policy_router = AutoPolicyRouter(
+            config=auto_policy_cfg,
+            w_conf=config.scoring.w_conf,
+            w_lifetime=config.scoring.w_lifetime,
+            w_area=config.scoring.w_area,
+            w_growth=config.scoring.w_growth,
+            w_center=config.scoring.w_center,
+            w_stability=config.scoring.w_stability,
+        )
         self.logger = logger or JsonlEventLogger(enabled=False)
 
     def set_event_log_path(self, output_path: Path) -> None:
@@ -74,6 +85,7 @@ class TargetSelectionFrameProcessor:
     def reset(self) -> None:
         self.store.reset()
         self.selector.reset()
+        self.auto_policy_router.reset()
 
     def process_prediction(
         self,
@@ -118,13 +130,29 @@ class TargetSelectionFrameProcessor:
             features[cand.track_id] = self.feature_extractor.extract(cand)
 
         candidate_map = {candidate.track_id: candidate for candidate in accepted_candidates}
+        requested_policy_name = policy_name
+        if requested_policy_name is None:
+            requested_policy_name = self.config.scoring.policy_name
+
+        auto_decision: AutoPolicyDecision | None = None
+        effective_policy_name = requested_policy_name
+        if str(requested_policy_name or "").strip().lower() == "auto":
+            auto_decision = self.auto_policy_router.choose(
+                candidates=candidate_map,
+                features=features,
+                primary_target_id=self.selector.current_target_id,
+            )
+            effective_policy_name = auto_decision.effective_policy_name
+
         scores: dict[int, ScoreBreakdown] = self.scorer.score_many(
             features=features,
             candidates=candidate_map,
-            policy_name=policy_name,
+            policy_name=effective_policy_name,
             external_signals=external_signals,
         )
         selection: SelectionResult = self.selector.select(scores)
+        if auto_decision is not None:
+            self.auto_policy_router.observe_selection(selection)
 
         events = self._build_events(
             frame_idx=frame_idx,
@@ -145,6 +173,15 @@ class TargetSelectionFrameProcessor:
             selection=selection,
             events=events,
             active_tracks=dict(states),
+            effective_policy_name=effective_policy_name,
+            auto_mode=(None if auto_decision is None else auto_decision.mode),
+            auto_mode_reason=(None if auto_decision is None else auto_decision.reason),
+            auto_scene_unstable=(None if auto_decision is None else auto_decision.scene_is_unstable),
+            auto_primary_acceptable=(None if auto_decision is None else auto_decision.primary_is_acceptable),
+            auto_primary_center_dist=(None if auto_decision is None else auto_decision.primary_center_dist),
+            auto_primary_margin_to_runner_up=(
+                None if auto_decision is None else auto_decision.primary_margin_to_runner_up
+            ),
         )
 
     def _class_name(self, prediction, cls_id: int, class_names: dict[int, str]) -> str:

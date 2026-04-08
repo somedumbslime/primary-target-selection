@@ -108,3 +108,10 @@ class SelectionOutput:
     events: list[SelectionEvent] = field(default_factory=list)
     candidates: list[SelectionCandidate] = field(default_factory=list)
     scores: dict[int, SelectionScoreBreakdown] = field(default_factory=dict)
+    effective_policy_name: str | None = None
+    auto_mode: str | None = None
+    auto_mode_reason: str | None = None
+    auto_scene_unstable: bool | None = None
+    auto_primary_acceptable: bool | None = None
+    auto_primary_center_dist: float | None = None
+    auto_primary_margin_to_runner_up: float | None = None

@@ -83,6 +83,7 @@ Integration template:
 - `stable_target`
 - `largest_target`
 - `class_priority`
+- `auto` (stateful router: `search -> hold -> center_assist`)
 
 You can also inject external hints per frame:
 
@@ -112,6 +113,7 @@ Policy intent (recommended usage):
 - `stable_target`: conservative lock behavior on noisy scenes
 - `center_biased`: optional FPV-oriented bias, monitor switch rate carefully
 - `largest_target` / `class_priority`: advanced/experimental
+- `auto`: adaptive mode that keeps `stable_target` as default hold policy and applies `center_biased` only as assist mode
 
 ## Ultralytics example pipeline (outside core layer)
 
