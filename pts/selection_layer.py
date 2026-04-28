@@ -119,6 +119,7 @@ class PrimaryTargetSelection:
         config_path: str | None = None,
         save_events_jsonl: bool = False,
         events_output_path: str | None = None,
+        default_fps: float = 30.0,
     ) -> None:
         if isinstance(config, TargetSelectionPipelineConfig):
             pipeline_cfg = config
@@ -138,6 +139,7 @@ class PrimaryTargetSelection:
             self.logger.set_output_path(Path(events_output_path))
         self.processor = TargetSelectionFrameProcessor(config=pipeline_cfg, logger=self.logger)
         self.frame_idx = 0
+        self.default_fps = float(default_fps) if float(default_fps) > 0 else 30.0
 
     @staticmethod
     def _materialize_default_config() -> Path | None:
@@ -162,6 +164,15 @@ class PrimaryTargetSelection:
         self.frame_idx = 0
         self.processor.reset()
 
+    def _resolve_frame_context(
+        self,
+        frame_idx: int | None,
+        timestamp_s: float | None,
+    ) -> tuple[int, float]:
+        idx = self.frame_idx if frame_idx is None else int(frame_idx)
+        ts = (float(idx) / self.default_fps) if timestamp_s is None else float(timestamp_s)
+        return idx, ts
+
     def set_event_output(self, output_path: str | None) -> None:
         if not output_path:
             self.logger.enabled = False
@@ -179,8 +190,7 @@ class PrimaryTargetSelection:
         policy_name: str | None = None,
         external_signals: Mapping[str, object] | None = None,
     ) -> SelectionOutput:
-        idx = self.frame_idx if frame_idx is None else int(frame_idx)
-        ts = float(idx) if timestamp_s is None else float(timestamp_s)
+        idx, ts = self._resolve_frame_context(frame_idx=frame_idx, timestamp_s=timestamp_s)
         observations = self._build_observations(
             tracks=tracks,
             frame_idx=idx,
@@ -198,18 +208,46 @@ class PrimaryTargetSelection:
         self.frame_idx = idx + 1
         return self._build_output(processed)
 
+    def update_with_frame(
+        self,
+        tracks: Sequence[SelectionTrack | dict[str, Any]],
+        frame: Any,
+        frame_idx: int | None = None,
+        timestamp_s: float | None = None,
+        policy_name: str | None = None,
+        external_signals: Mapping[str, object] | None = None,
+    ) -> SelectionOutput:
+        if frame is None or not hasattr(frame, "shape") or len(frame.shape) < 2:
+            raise ValueError("frame must be an image-like object with shape [H, W, ...]")
+        frame_h, frame_w = int(frame.shape[0]), int(frame.shape[1])
+        return self.update(
+            tracks=tracks,
+            frame_size=(frame_w, frame_h),
+            frame_idx=frame_idx,
+            timestamp_s=timestamp_s,
+            policy_name=policy_name,
+            external_signals=external_signals,
+        )
+
     def update_from_prediction(
         self,
         prediction: Any,
-        frame_shape: tuple[int, int],
+        frame_shape: tuple[int, int] | None = None,
         frame_idx: int | None = None,
         timestamp_s: float | None = None,
         class_names: dict[int, str] | None = None,
         policy_name: str | None = None,
         external_signals: Mapping[str, object] | None = None,
     ) -> SelectionOutput:
-        idx = self.frame_idx if frame_idx is None else int(frame_idx)
-        ts = float(idx) if timestamp_s is None else float(timestamp_s)
+        idx, ts = self._resolve_frame_context(frame_idx=frame_idx, timestamp_s=timestamp_s)
+        if frame_shape is None:
+            orig_shape = getattr(prediction, "orig_shape", None)
+            if isinstance(orig_shape, (list, tuple)) and len(orig_shape) >= 2:
+                frame_shape = (int(orig_shape[0]), int(orig_shape[1]))
+            else:
+                raise ValueError(
+                    "frame_shape is required when prediction does not provide orig_shape"
+                )
         processed = self.processor.process_prediction(
             prediction=prediction,
             frame_idx=idx,

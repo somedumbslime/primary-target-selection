@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from .adapters import (
+    frame_size_from_prediction,
+    prediction_to_selection_input,
+    prediction_to_tracks,
+    reset_ultralytics_trackers,
+    resolve_class_name,
+)
 from .selection_layer import PrimaryTargetSelection
 from .types import (
     RejectReasonName,
@@ -12,6 +19,7 @@ from .types import (
     SelectionStateName,
     SelectionTrack,
 )
+from .visualization import draw_selection_overlay, selection_output_to_signal
 
 __all__ = [
     "PrimaryTargetSelection",
@@ -24,5 +32,11 @@ __all__ = [
     "SelectionEvent",
     "SelectionScoreBreakdown",
     "SelectionCandidate",
+    "resolve_class_name",
+    "prediction_to_tracks",
+    "frame_size_from_prediction",
+    "prediction_to_selection_input",
+    "reset_ultralytics_trackers",
+    "draw_selection_overlay",
+    "selection_output_to_signal",
 ]
-
